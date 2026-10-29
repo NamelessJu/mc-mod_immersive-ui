@@ -17,6 +17,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.chat.Style;
 import net.minecraft.util.Mth;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -24,10 +25,7 @@ import org.joml.Matrix3x2f;
 import org.joml.Vector2f;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -100,8 +98,32 @@ public class CommonCode {
         guiGraphics.item(itemStack, -8, -8);
 
         if (ImmersiveUI.CONFIG.inventory.enableRarityParticles) {
-            List<Integer> colors = itemStack.getHoverName().getSiblings().stream().map(c -> c.getStyle().getColor() == null ? 0 : c.getStyle().getColor().getValue()).toList();
-            int color = colors.isEmpty() ? 0xffffff : colors.get(random.nextInt(colors.size()));
+            HashMap<Integer, Integer> colors = new HashMap<>();
+            itemStack.getHoverName().visit((style, text) -> {
+                if (style.getColor() != null)
+                {
+                    int colorValue = style.getColor().getValue();
+                    if (colors.containsKey(colorValue)) colors.put(colorValue, colors.get(colorValue) + text.length());
+                    else colors.put(colorValue, text.length());
+                }
+                return Optional.empty();
+            }, Style.EMPTY);
+
+            int color = 0xffffff;
+            if (!colors.isEmpty())
+            {
+                int weightSum = colors.values().stream().mapToInt(Integer::intValue).sum();
+                int rngValue = random.nextInt(weightSum);
+                for (int colorValue : colors.keySet())
+                {
+                    rngValue -= colors.get(colorValue);
+                    if (rngValue < 0)
+                    {
+                        color = colorValue;
+                        break;
+                    }
+                }
+            }
             color = colors.isEmpty() ? itemStack.getDisplayName().getStyle().getColor() != null ? itemStack.getDisplayName().getStyle().getColor().getValue() : 0xffffff : color;
 
             if (color != 0xffffff) {
